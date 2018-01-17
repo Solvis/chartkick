@@ -2,7 +2,7 @@
  * Chartkick.js
  * Create beautiful charts with one line of JavaScript
  * https://github.com/ankane/chartkick.js
- * v2.2.4
+ * v2.2.2
  * MIT License
  */
 
@@ -351,10 +351,6 @@
     return a[0].getTime() - b[0].getTime();
   }
 
-  function sortByNumberSeries(a, b) {
-    return a[0] - b[0];
-  }
-
   function sortByNumber(a, b) {
     return a - b;
   }
@@ -498,9 +494,6 @@
               }
             }
             series[i].marker = {symbol: "circle"};
-            if (chart.options.points === false) {
-              series[i].marker.enabled = false;
-            }
           }
           options.series = series;
           chart.chart = new Highcharts.Chart(options);
@@ -563,28 +556,19 @@
             }
           }
 
-          if (chart.options.xtype === "number") {
-            categories.sort(sortByNumber);
-          }
-
           options.xAxis.categories = categories;
 
-          var newSeries = [], d2;
+          var newSeries = [];
           for (i = 0; i < series.length; i++) {
             d = [];
             for (j = 0; j < categories.length; j++) {
               d.push(rows[categories[j]][i] || 0);
             }
 
-            d2 = {
+            newSeries.push({
               name: series[i].name,
               data: d
-            }
-            if (series[i].stack) {
-              d2.stack = series[i].stack;
-            }
-
-            newSeries.push(d2);
+            });
           }
           options.series = newSeries;
 
@@ -645,9 +629,6 @@
             };
             if (config.language) {
               loadOptions.language = config.language;
-            }
-            if (pack === "corechart" && config.mapsApiKey) {
-              loadOptions.mapsApiKey = config.mapsApiKey;
             }
 
             if (window.google.setOnLoadCallback) {
@@ -755,7 +736,7 @@
         var jsOptions = jsOptionsFunc(defaultOptions, hideLegend, setTitle, setMin, setMax, setStacked, setXtitle, setYtitle);
 
         // cant use object as key
-        var createDataTable = function (series, columnType, xtype) {
+        var createDataTable = function (series, columnType) {
           var i, j, s, d, key, rows = [], sortedLabels = [];
           for (i = 0; i < series.length; i++) {
             s = series[i];
@@ -784,20 +765,21 @@
             } else {
               value = i;
             }
-            rows2.push([value].concat(rows[i]));
+
+            // Original code: insert all data values into a new row in the DataTable object
+            // rows2.push([value].concat(rows[i]));
+
+            // Hack: put two copies of each data value into the new DataTable row
+            var arr = [];
+            for (var k=0; k<rows[i].length; k++) {
+              arr.push(rows[i][k]);
+              arr.push(rows[i][k]);
+            }
+            rows2.push([value].concat(arr));
+
           }
           if (columnType === "datetime") {
             rows2.sort(sortByTime);
-          } else if (columnType === "number") {
-            rows2.sort(sortByNumberSeries);
-          }
-
-          if (xtype === "number") {
-            rows2.sort(sortByNumberSeries);
-
-            for (var i = 0; i < rows2.length; i++) {
-              rows2[i][0] = toStr(rows2[i][0]);
-            }
           }
 
           // create datatable
@@ -806,6 +788,9 @@
           data.addColumn(columnType, "");
           for (i = 0; i < series.length; i++) {
             data.addColumn("number", series[i].name);
+            // Hack: now that the values are duplicated, add one annotation
+            // column after each data column
+            data.addColumn({type: 'number', role: 'annotation'});
           }
           data.addRows(rows2);
 
@@ -829,16 +814,8 @@
               chartOptions.curveType = "none";
             }
 
-            if (chart.options.points === false) {
-              chartOptions.pointSize = 0;
-            }
-
             var options = jsOptions(chart, chart.options, chartOptions);
-            var columnType = chart.discrete ? "string" : "datetime";
-            if (chart.options.xtype === "number") {
-              columnType = "number";
-            }
-            var data = createDataTable(chart.data, columnType);
+            var data = createDataTable(chart.data, chart.discrete ? "string" : "datetime");
             chart.chart = new google.visualization.LineChart(chart.element);
             resize(function () {
               chart.chart.draw(data, options);
@@ -884,7 +861,7 @@
         this.renderColumnChart = function (chart) {
           waitForLoaded(function () {
             var options = jsOptions(chart, chart.options);
-            var data = createDataTable(chart.data, "string", chart.options.xtype);
+            var data = createDataTable(chart.data, "string");
             chart.chart = new google.visualization.ColumnChart(chart.element);
             resize(function () {
               chart.chart.draw(data, options);
@@ -902,7 +879,7 @@
               }
             };
             var options = jsOptionsFunc(defaultOptions, hideLegend, setTitle, setBarMin, setBarMax, setStacked, setXtitle, setYtitle)(chart, chart.options, chartOptions);
-            var data = createDataTable(chart.data, "string", chart.options.xtype);
+            var data = createDataTable(chart.data, "string");
             chart.chart = new google.visualization.BarChart(chart.element);
             resize(function () {
               chart.chart.draw(data, options);
@@ -917,13 +894,8 @@
               pointSize: 0,
               areaOpacity: 0.5
             };
-
             var options = jsOptions(chart, chart.options, chartOptions);
-            var columnType = chart.discrete ? "string" : "datetime";
-            if (chart.options.xtype === "number") {
-              columnType = "number";
-            }
-            var data = createDataTable(chart.data, columnType);
+            var data = createDataTable(chart.data, chart.discrete ? "string" : "datetime");
             chart.chart = new google.visualization.AreaChart(chart.element);
             resize(function () {
               chart.chart.draw(data, options);
@@ -1063,7 +1035,7 @@
         var defaultColors = [
           "#3366CC", "#DC3912", "#FF9900", "#109618", "#990099", "#3B3EAC", "#0099C6",
           "#DD4477", "#66AA00", "#B82E2E", "#316395", "#994499", "#22AA99", "#AAAA11",
-          "#6633CC", "#E67300", "#8B0707", "#329262", "#5574A6", "#651067"
+          "#6633CC", "#E67300", "#8B0707", "#329262", "#5574A6", "#3B3EAC"
         ];
 
         var hideLegend = function (options, legend, hideLegend) {
@@ -1191,7 +1163,7 @@
             }
           }
 
-          if (detectType || chart.options.xtype === "number") {
+          if (detectType) {
             sortedLabels.sort(sortByNumber);
           }
 
@@ -1242,17 +1214,8 @@
               borderWidth: 2
             };
 
-            if (s.stack) {
-              dataset.stack = s.stack;
-            }
-
             if (chart.options.curve === false) {
               dataset.lineTension = 0;
-            }
-
-            if (chart.options.points === false) {
-              dataset.pointRadius = 0;
-              dataset.pointHitRadius = 5;
             }
 
             datasets.push(merge(dataset, s.library || {}));
@@ -1323,10 +1286,6 @@
         };
 
         this.renderLineChart = function (chart, chartType) {
-          if (chart.options.xtype === "number") {
-            return self.renderScatterChart(chart, chartType, true);
-          }
-
           var chartOptions = {};
           if (chartType === "area") {
             // TODO fix area stacked
@@ -1405,7 +1364,7 @@
           self.renderColumnChart(chart, "bar");
         };
 
-        this.renderScatterChart = function (chart, chartType, lineChart) {
+        this.renderScatterChart = function (chart, chartType) {
           chartType = chartType || "line";
 
           var options = jsOptions(chart, chart.options);
@@ -1429,21 +1388,15 @@
             }
 
             var color = s.color || colors[i];
-            var backgroundColor = chartType === "area" ? addOpacity(color, 0.5) : color;
 
             datasets.push({
               label: s.name,
-              showLine: lineChart || false,
+              showLine: false,
               data: d,
               borderColor: color,
-              backgroundColor: backgroundColor,
-              pointBackgroundColor: color,
-              fill: chartType === "area"
+              backgroundColor: color,
+              pointBackgroundColor: color
             })
-          }
-
-          if (chartType === "area") {
-            chartType = "line";
           }
 
           var data = {datasets: datasets};
@@ -1514,8 +1467,6 @@
     }
     if (keyType === "datetime") {
       r.sort(sortByTime);
-    } else if (keyType === "number") {
-      r.sort(sortByNumberSeries);
     }
     return r;
   };
@@ -1574,22 +1525,6 @@
     return false;
   }
 
-  // creates a shallow copy of each element of the array
-  // elements are expected to be objects
-  function copySeries(series) {
-    var newSeries = [], i, j;
-    for (i = 0; i < series.length; i++) {
-      var copy = {}
-      for (j in series[i]) {
-        if (series[i].hasOwnProperty(j)) {
-          copy[j] = series[i][j];
-        }
-      }
-      newSeries.push(copy)
-    }
-    return newSeries;
-  }
-
   function processSeries(chart, keyType) {
     var i;
 
@@ -1611,12 +1546,8 @@
     if (chart.discrete) {
       keyType = "string";
     }
-    if (chart.options.xtype) {
-      keyType = chart.options.xtype;
-    }
 
     // right format
-    series = copySeries(series);
     for (i = 0; i < series.length; i++) {
       series[i].data = formatSeriesData(toArr(series[i].data), keyType);
     }
@@ -1728,10 +1659,10 @@
       fetchDataSource(chart, callback, chart.rawData);
     };
     chart.refreshData = function () {
-      if (typeof chart.dataSource === "string") {
+      if (typeof dataSource === "string") {
         // prevent browser from caching
-        var sep = chart.dataSource.indexOf("?") === -1 ? "?" : "&";
-        var url = chart.dataSource + sep + "_=" + (new Date()).getTime();
+        var sep = dataSource.indexOf("?") === -1 ? "?" : "&";
+        var url = dataSource + sep + "_=" + (new Date()).getTime();
         fetchDataSource(chart, callback, url);
       }
     };
@@ -1815,3 +1746,4 @@
     window.Chartkick = Chartkick;
   }
 }(window));
+
